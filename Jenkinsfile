@@ -2,55 +2,72 @@ pipeline {
   agent any
 
   environment {
-    IMAGE_NAME = "simple-java-project"
-    IMAGE_TAG  = "1.0.0"
-    NEXUS_DOCKER = "<nexus-host>:5000" // replace with your nexus docker registry host:port
+    IMAGE_NAME = "my-java-app"                      // local image name
+    IMAGE_TAG  = "${env.BUILD_NUMBER ?: 'latest'}" // tag for image
+    DOCKER_REG  = ""                                // set to dockerhub/repo if pushing
+    CONTAINER_NAME = "java-app"
   }
 
   stages {
     stage('Checkout') {
       steps {
-        checkout scm
+        git url: 'https://github.com/swetha-200160/docker.git', branch: 'main' // update to your repo
       }
     }
 
     stage('Build (Maven)') {
       steps {
-        sh 'mvn -B -DskipTests package'
+        // If using Linux agent with maven installed:
+        sh 'mvn -B clean package -DskipTests'
+
+        // If on Windows agents, replace with: bat 'mvn -B clean package -DskipTests'
       }
     }
 
-    stage('Build Docker image') {
+    stage('Build Docker Image') {
       steps {
-        sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .'
+        script {
+          // build image using tag
+          sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+        }
       }
     }
 
-    stage('Login to Nexus Docker registry') {
+    stage('Optional: Push to Docker Registry') {
+      when { expression { return env.DOCKER_REG != "" } }
       steps {
-        // Credentials should be stored in Jenkins credentials and used via withCredentials
-        sh 'docker login ${NEXUS_DOCKER} -u ${NEXUS_USER} -p ${NEXUS_PASS}'
+        withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+          sh '''
+            docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${DOCKER_REG}:${IMAGE_TAG}
+            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+            docker push ${DOCKER_REG}:${IMAGE_TAG}
+            docker logout
+          '''
+        }
       }
     }
 
-    stage('Tag & Push to Nexus') {
+    stage('Deploy (stop old / run new)') {
       steps {
-        sh 'docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${NEXUS_DOCKER}/${IMAGE_NAME}:${IMAGE_TAG}'
-        sh 'docker push ${NEXUS_DOCKER}/${IMAGE_NAME}:${IMAGE_TAG}'
-      }
-    }
-
-    stage('Optional: Deploy Maven artifact to Nexus') {
-      steps {
-        // This requires Jenkins to have settings.xml with server id 'nexus' and credentials
-        sh 'mvn -s settings.xml deploy -DskipTests'
+        script {
+          // remove old container if exists
+          sh '''
+            if [ "$(docker ps -aq -f name=${CONTAINER_NAME})" ]; then
+              docker rm -f ${CONTAINER_NAME} || true
+            fi
+            docker run -d -p 8085:8080 --name ${CONTAINER_NAME} ${IMAGE_NAME}:${IMAGE_TAG}
+          '''
+        }
       }
     }
   }
 
   post {
-    always {
-      echo "Pipeline finished"
+    success {
+      echo "Pipeline finished successfully"
+    }
+    failure {
+      echo "Pipeline failed"
     }
   }
 }
