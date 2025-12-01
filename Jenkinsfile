@@ -15,27 +15,24 @@ pipeline {
 
         stage('Build Maven') {
             steps {
-                sh 'mvn clean package -DskipTests'
+                bat 'mvn clean package -DskipTests'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t my-java-app .'
+                bat 'docker build -t my-java-app .'
             }
         }
 
         stage('Deploy Docker Container') {
             steps {
-                sh '''
-                if [ "$(docker ps -aq -f name=java-app)" ]; then
-                    docker rm -f java-app
-                fi
-
+                bat '''
+                docker ps -a --filter "name=java-app" -q > tmp.txt
+                for /f %%i in (tmp.txt) do docker rm -f %%i
                 docker run -d -p 8085:8080 --name java-app my-java-app
                 '''
             }
         }
     }
 }
-.
