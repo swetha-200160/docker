@@ -9,7 +9,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git url: 'https://github.com/<YOUR-USERNAME>/<YOUR-REPO>.git', branch: 'main'
+                git url: 'https://github.com/swetha-200160/docker.git', branch: 'master'
             }
         }
 
@@ -38,3 +38,4 @@ pipeline {
         }
     }
 }
+.
