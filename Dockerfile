@@ -1,13 +1,13 @@
-# Multi-stage Dockerfile: build with Maven then copy runnable jar into slim JRE image
-FROM maven:3.8.8-openjdk-11 AS build
+# Step 1: Build the application using Maven
+FROM maven:3.9.6-eclipse-temurin-17 AS build
 WORKDIR /app
-COPY pom.xml .
-COPY src ./src
-RUN mvn -B -DskipTests package
+COPY . .
+RUN mvn clean package -DskipTests
 
-FROM openjdk:11-jre-slim
+# Step 2: Run the jar file in a smaller JDK image
+FROM eclipse-temurin:17-jre
 WORKDIR /app
-# copy jar from build stage (artifactId-version.jar)
-COPY --from=build /app/target/simple-java-project-1.0.0.jar app.jar
+COPY --from=build /app/target/*.jar app.jar
+
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
