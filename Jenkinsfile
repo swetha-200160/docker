@@ -1,38 +1,26 @@
-pipeline {
-    agent any
-
-    environment {
-        IMAGE_NAME = "my-java-app"
-        CONTAINER_NAME = "java-app"
+pipeline { agent any
+  environment {
+    NEXUS_REG = "localhost:8083"
+    IMAGE = "${NEXUS_REG}/docker-hosted/my-java-app:latest"
+    CONTAINER = "myapp-from-nexus"
+  }
+  stages {
+    stage('Docker Login') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'nexus-docker-cred', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+          bat 'echo %NEXUS_PASS% | docker login %NEXUS_REG% -u %NEXUS_USER% --password-stdin'
+        }
+      }
     }
-
-    stages {
-        stage('Checkout') {
-            steps {
-                git url: 'https://github.com/swetha-200160/docker.git', branch: 'master'
-            }
-        }
-
-        stage('Build Maven') {
-            steps {
-                bat 'mvn clean package -DskipTests'
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                bat 'docker build -t my-java-app .'
-            }
-        }
-
-        stage('Deploy Docker Container') {
-            steps {
-                bat '''
-                docker ps -a --filter "name=java-app" -q > tmp.txt
-                for /f %%i in (tmp.txt) do docker rm -f %%i
-                docker run -d -p 8085:8080 --name java-app my-java-app
-                '''
-            }
-        }
+    stage('Pull & Run') {
+      steps {
+        bat '''
+          docker pull %IMAGE%
+          docker rm -f %CONTAINER% || echo none
+          docker run -d -p 8085:8080 --name %CONTAINER% %IMAGE%
+        '''
+      }
     }
+  }
+  post { always { bat 'docker logout %NEXUS_REG% || echo logout' } }
 }
