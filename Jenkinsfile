@@ -1,26 +1,35 @@
-pipeline { agent any
-  environment {
-    NEXUS_REG = "localhost:8083"
-    IMAGE = "${NEXUS_REG}/docker-hosted/my-java-app:latest"
-    CONTAINER = "myapp-from-nexus"
-  }
-  stages {
-    stage('Docker Login') {
-      steps {
-        withCredentials([usernamePassword(credentialsId: 'nexus-docker-cred', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-          bat 'echo %NEXUS_PASS% | docker login %NEXUS_REG% -u %NEXUS_USER% --password-stdin'
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/swetha-200160/java-project.git'
+            }
         }
-      }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    dockerImage = docker.build("localhost:8082/myapp:latest")
+                }
+            }
+        }
+
+        stage('Login to Nexus') {
+            steps {
+                script {
+                    sh "docker login localhost:8082 -u admin -p yourpassword"
+                }
+            }
+        }
+
+        stage('Push to Nexus') {
+            steps {
+                script {
+                    dockerImage.push()
+                }
+            }
+        }
     }
-    stage('Pull & Run') {
-      steps {
-        bat '''
-          docker pull %IMAGE%
-          docker rm -f %CONTAINER% || echo none
-          docker run -d -p 8085:8080 --name %CONTAINER% %IMAGE%
-        '''
-      }
-    }
-  }
-  post { always { bat 'docker logout %NEXUS_REG% || echo logout' } }
 }
