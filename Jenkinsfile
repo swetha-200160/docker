@@ -2,7 +2,8 @@ pipeline {
     agent any
 
     stages {
-        stage('Checkout') {
+
+        stage('Checkout Code') {
             steps {
                 git 'https://github.com/swetha-200160/java-project.git'
             }
@@ -10,25 +11,25 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    dockerImage = docker.build("localhost:8082/myapp:latest")
-                }
+                bat """
+                    docker build -t localhost:8082/myapp:latest .
+                """
             }
         }
 
-        stage('Login to Nexus') {
+        stage('Login to Nexus Docker Registry') {
             steps {
-                script {
-                    sh "docker login localhost:8082 -u admin -p yourpassword"
-                }
+                bat """
+                    echo yourpassword | docker login localhost:8082 -u admin --password-stdin
+                """
             }
         }
 
-        stage('Push to Nexus') {
+        stage('Push Docker Image to Nexus') {
             steps {
-                script {
-                    dockerImage.push()
-                }
+                bat """
+                    docker push localhost:8082/myapp:latest
+                """
             }
         }
     }
