@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        SONARQUBE_SERVER = 'SonarQube'       // Must match Jenkins SonarQube name
         SONAR_AUTH_TOKEN = credentials('sonar-token')
         DOCKER_REGISTRY  = 'localhost:9082'
         IMAGE_NAME       = 'myapp'
@@ -27,7 +26,7 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('SonarQube') {
+                withSonarQubeEnv('sonarqube') {   // <<----- CHANGE THIS NAME
                     sh """
                         mvn sonar:sonar \
                         -Dsonar.projectKey=my-java-project \
@@ -48,21 +47,13 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh """
-                    docker build -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} .
-                """
+                sh "docker build -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ."
             }
         }
 
         stage('Push to Nexus Registry') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: "${NEXUS_CRED_ID}",
-                        usernameVariable: 'USER',
-                        passwordVariable: 'PASS'
-                    )
-                ]) {
+                withCredentials([usernamePassword(credentialsId: "${NEXUS_CRED_ID}", usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     sh """
                         docker login ${DOCKER_REGISTRY} -u $USER -p $PASS
                         docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
@@ -73,21 +64,13 @@ pipeline {
 
         stage('Pull Image from Nexus Registry') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: "${NEXUS_CRED_ID}",
-                        usernameVariable: 'USER',
-                        passwordVariable: 'PASS'
-                    )
-                ]) {
+                withCredentials([usernamePassword(credentialsId: "${NEXUS_CRED_ID}", usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     sh """
-                        echo "Pulling image from Nexus registry..."
                         docker login ${DOCKER_REGISTRY} -u $USER -p $PASS
                         docker pull ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
                     """
                 }
             }
         }
-
     }
 }
