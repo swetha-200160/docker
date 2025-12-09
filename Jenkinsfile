@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        SONARQUBE_SERVER = 'sonarqube'     
-        SONAR_CRED_ID    = 'sonar-token'
+        SONARQUBE_SERVER = 'SonarQube'       // Must match Jenkins SonarQube name
+        SONAR_AUTH_TOKEN = credentials('sonar-token')
         DOCKER_REGISTRY  = 'localhost:9082'
         IMAGE_NAME       = 'myapp'
         IMAGE_TAG        = '1.0'
@@ -27,25 +27,19 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                
+                withSonarQubeEnv('SonarQube') {
+                    sh """
+                        mvn sonar:sonar \
+                        -Dsonar.projectKey=my-java-project \
+                        -Dsonar.host.url=http://localhost:9000 \
+                        -Dsonar.login=${SONAR_AUTH_TOKEN}
+                    """
                 }
             }
         }
 
         stage('Quality Gate') {
-            steps {withSonarQubeEnv("SonarQube") {
-            withSonarQubeEnv("SonarQube") {
-    sh '''
-        mvn sonar:sonar \
-        -Dsonar.projectKey=my-java-project \
-        -Dsonar.host.url=http://localhost:9000 \
-        -Dsonar.login=$SONAR_AUTH_TOKEN
-    '''
-}
-
-    '''
-}
-
+            steps {
                 timeout(time: 2, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
@@ -54,31 +48,43 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh '''
-                    docker build -t $DOCKER_REGISTRY/$IMAGE_NAME:$IMAGE_TAG .
-                '''
+                sh """
+                    docker build -t ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} .
+                """
             }
         }
 
         stage('Push to Nexus Registry') {
             steps {
-                withCredentials([usernamePassword(credentialsId: "${NEXUS_CRED_ID}", usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    sh '''
-                        docker login $DOCKER_REGISTRY -u $USER -p $PASS
-                        docker push $DOCKER_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
-                    '''
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: "${NEXUS_CRED_ID}",
+                        usernameVariable: 'USER',
+                        passwordVariable: 'PASS'
+                    )
+                ]) {
+                    sh """
+                        docker login ${DOCKER_REGISTRY} -u $USER -p $PASS
+                        docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                    """
                 }
             }
         }
 
         stage('Pull Image from Nexus Registry') {
             steps {
-                withCredentials([usernamePassword(credentialsId: "${NEXUS_CRED_ID}", usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    sh '''
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: "${NEXUS_CRED_ID}",
+                        usernameVariable: 'USER',
+                        passwordVariable: 'PASS'
+                    )
+                ]) {
+                    sh """
                         echo "Pulling image from Nexus registry..."
-                        docker login $DOCKER_REGISTRY -u $USER -p $PASS
-                        docker pull $DOCKER_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
-                    '''
+                        docker login ${DOCKER_REGISTRY} -u $USER -p $PASS
+                        docker pull ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                    """
                 }
             }
         }
