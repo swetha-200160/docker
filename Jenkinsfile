@@ -27,19 +27,25 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv("${SONARQUBE_SERVER}") {
-                    sh '''
-                        mvn sonar:sonar \
-                        -Dsonar.projectKey=my-java-project \
-                        -Dsonar.host.url=http://localhost:9000 \
-                        -Dsonar.login=$SONARQUBE_SERVER
-                    '''
+                
                 }
             }
         }
 
         stage('Quality Gate') {
-            steps {
+            steps {withSonarQubeEnv("SonarQube") {
+            withSonarQubeEnv("SonarQube") {
+    sh '''
+        mvn sonar:sonar \
+        -Dsonar.projectKey=my-java-project \
+        -Dsonar.host.url=http://localhost:9000 \
+        -Dsonar.login=$SONAR_AUTH_TOKEN
+    '''
+}
+
+    '''
+}
+
                 timeout(time: 2, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
