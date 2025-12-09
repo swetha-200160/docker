@@ -2,48 +2,80 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY_URL = "localhost:8082"
-        IMAGE_NAME   = "myapp"
-        IMAGE_TAG    = "latest"
-        DOCKER_CREDS = "docker-nexus-creds"
-        HOST_PORT    = "9090"   // Use a free port on Windows
-        CONTAINER_PORT = "8080" // Internal container port
+        SONARQUBE_SERVER = 'sonarqube'     
+        SONAR_CRED_ID    = 'sonar-token'
+        DOCKER_REGISTRY  = 'localhost:9082'
+        IMAGE_NAME       = 'myapp'
+        IMAGE_TAG        = '1.0'
+        NEXUS_CRED_ID    = 'nexus-docker-cred'
     }
 
     stages {
 
-        stage('Login to Nexus Docker Registry') {
+        stage('Checkout') {
             steps {
-                withCredentials([usernamePassword(credentialsId: DOCKER_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    bat """
-                        echo %PASS% | docker login %REGISTRY_URL% -u %USER% --password-stdin
-                    """
+                git branch: 'master',
+                    url: 'https://github.com/swetha-200160/java-project.git'
+            }
+        }
+
+        stage('Build Project') {
+            steps {
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv("${SONARQUBE_SERVER}") {
+                    sh '''
+                        mvn sonar:sonar \
+                        -Dsonar.projectKey=my-java-project \
+                        -Dsonar.host.url=http://localhost:9000 \
+                        -Dsonar.login=$SONARQUBE_SERVER
+                    '''
                 }
             }
         }
 
-        stage('Pull Image From Nexus') {
+        stage('Quality Gate') {
             steps {
-                bat """
-                    docker pull %REGISTRY_URL%/%IMAGE_NAME%:%IMAGE_TAG%
-                """
+                timeout(time: 2, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
             }
         }
 
-        stage('Run Docker Container') {
+        stage('Build Docker Image') {
             steps {
-                bat """
-                    docker stop myapp-container || echo Container not running
-                    docker rm myapp-container || echo No container to remove
-                    docker run -d --name myapp-container -p %HOST_PORT%:%CONTAINER_PORT% %REGISTRY_URL%/%IMAGE_NAME%:%IMAGE_TAG%
-                """
+                sh '''
+                    docker build -t $DOCKER_REGISTRY/$IMAGE_NAME:$IMAGE_TAG .
+                '''
             }
         }
-    }
 
-    post {
-        always {
-            bat "docker logout %REGISTRY_URL%"
+        stage('Push to Nexus Registry') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: "${NEXUS_CRED_ID}", usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                    sh '''
+                        docker login $DOCKER_REGISTRY -u $USER -p $PASS
+                        docker push $DOCKER_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+                    '''
+                }
+            }
         }
+
+        stage('Pull Image from Nexus Registry') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: "${NEXUS_CRED_ID}", usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                    sh '''
+                        echo "Pulling image from Nexus registry..."
+                        docker login $DOCKER_REGISTRY -u $USER -p $PASS
+                        docker pull $DOCKER_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+                    '''
+                }
+            }
+        }
+
     }
 }
