@@ -26,7 +26,8 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('sonarqube') {   // <<----- CHANGE THIS NAME
+               withSonarQubeEnv('sonarqube')
+{   // <<----- CHANGE THIS NAME
                     sh """
                         mvn sonar:sonar \
                         -Dsonar.projectKey=my-java-project \
