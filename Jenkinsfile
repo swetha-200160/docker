@@ -24,16 +24,19 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-            steps {
-               withSonarQubeEnv('sonarqube')
-{   // <<----- CHANGE THIS NAME
-                    sh """
-                        mvn sonar:sonar \
-                        -Dsonar.projectKey=my-java-project \
-                        -Dsonar.host.url=http://localhost:9000 \
-                        -Dsonar.login=${SONAR_AUTH_TOKEN}
-                    """
+       stage('SonarQube Analysis') {
+    steps {
+        withSonarQubeEnv('SonarQube') {   // <-- FIXED NAME
+            sh """
+                mvn sonar:sonar \
+                -Dsonar.projectKey=my-java-project \
+                -Dsonar.host.url=http://localhost:9000 \
+                -Dsonar.login=${SONAR_AUTH_TOKEN}
+            """
+        }
+    }
+}
+
                 }
             }
         }
